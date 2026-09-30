@@ -29,10 +29,9 @@ void CliHandler::printHelp() {
     Serial.println("  [System & Network]");
     Serial.println("    status            : Print complete hardware and network status");
     Serial.println("    poll              : Force immediate HTTP GET poll");
+    Serial.println("    scan              : Scan and list 2.4GHz Wi-Fi networks in range");
     Serial.println("    wifi <ssid> [pwd] : Configure & save Wi-Fi credentials");
     Serial.println("    api <url>         : Configure & save scoring API endpoint");
-    Serial.println("    free              : Power down all motor coils immediately");
-    Serial.println("    pause             : Pause background network polling (for calibration)");
     Serial.println("    resume            : Resume background network polling");
     Serial.println("    save              : Persist current step positions to NVS flash");
     Serial.println("    help              : Show this help menu");
@@ -70,11 +69,11 @@ void CliHandler::processCommand(const String& line) {
 
     int firstSpace = trimmed.indexOf(' ');
     String cmd = (firstSpace == -1) ? trimmed : trimmed.substring(0, firstSpace);
-    String arg = (firstSpace == -1) ? "" : trimmed.substring(firstSpace + 1);
-    arg.trim();
+    String rawArg = (firstSpace == -1) ? "" : trimmed.substring(firstSpace + 1);
+    rawArg.trim();
+    String arg = rawArg;
     cmd.toLowerCase();
     arg.toLowerCase();
-
     if (cmd == "help" || cmd == "?") {
         printHelp();
     } else if (cmd == "status") {
@@ -143,17 +142,30 @@ void CliHandler::processCommand(const String& line) {
         _gauge.savePositionToNvs();
         Serial.println("[CLI] 💾 Hand positions persisted to NVS flash.");
     } else if (cmd == "wifi") {
-        int sp = arg.indexOf(' ');
+        int sp = rawArg.indexOf(' ');
         if (sp != -1) {
-            String ssid = arg.substring(0, sp);
-            String pwd = arg.substring(sp + 1);
+            String ssid = rawArg.substring(0, sp);
+            String pwd = rawArg.substring(sp + 1);
             ssid.trim(); pwd.trim();
             _net.setWifiCredentials(ssid, pwd);
-        } else if (arg.length() > 0) {
-            _net.setWifiCredentials(arg, "");
+        } else if (rawArg.length() > 0) {
+            _net.setWifiCredentials(rawArg, "");
+        }
+    } else if (cmd == "scan") {
+        Serial.println("[NET] Scanning 2.4GHz Wi-Fi networks in range...");
+        int n = WiFi.scanNetworks();
+        if (n == 0) {
+            Serial.println("[NET] No networks found.");
+        } else {
+            Serial.printf("[NET] Found %d networks:\n", n);
+            for (int i = 0; i < n; ++i) {
+                Serial.printf("   • %-24s (%d dBm) %s\n",
+                              WiFi.SSID(i).c_str(), WiFi.RSSI(i),
+                              WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "[OPEN]" : "[SECURED]");
+            }
         }
     } else if (cmd == "api") {
-        if (arg.length() > 0) _net.setApiUrl(arg);
+        if (rawArg.length() > 0) _net.setApiUrl(rawArg);
     } else {
         Serial.printf("[CLI] Unknown command: '%s'. Type 'help' for command list.\n", cmd.c_str());
     }
