@@ -11,7 +11,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from scorer import SurfScorer
 
-PORT = 8080
+PORT = int(os.environ.get("PORT", 8080))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SPOTS_FILE = os.path.join(BASE_DIR, "spots.json")
 STATIC_DIR = os.path.join(BASE_DIR, "static")

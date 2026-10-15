@@ -34,7 +34,7 @@
 #define DEFAULT_WIFI_SSID     "YOUR_WIFI_SSID"
 #define DEFAULT_WIFI_PASS     "YOUR_WIFI_PASSWORD"
 
-// Public Cloudflare Worker scoring service (or your self-hosted instance)
+// Default public scoring service (or set your own Google AI Studio / Cloud Run URL via serial: `api https://<your-service>.run.app/api/surf`)
 #define DEFAULT_API_URL       "https://surfclock.eggbot.net/api/surf"
 
 #define POLL_INTERVAL_MS      60000

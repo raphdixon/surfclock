@@ -1,0 +1,5 @@
+{
+  "name": "SurfClock Telemetry & Scoring Backend",
+  "description": "Google AI Studio & Cloud Run backend for the ESP32 SurfClock dual-dial display and live surf telemetry dashboard.",
+  "requestFramePermissions": []
+}

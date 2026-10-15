@@ -12,7 +12,7 @@ You will:
 1. Identify which setup path the user is taking (Web Customizer ZIP vs. GitHub Repo).
 2. Configure the 5 target surf breaks and physical dial angles.
 3. Build and flash the firmware over USB using PlatformIO.
-4. Configure Wi-Fi and deploy the Cloudflare Worker edge API.
+4. Configure Wi-Fi and deploy the Google AI Studio / Cloud Run backend.
 5. Guide or execute the hand alignment calibration sequence.
 
 ---
@@ -23,7 +23,7 @@ Check the workspace for existing files and ask the user which path they are usin
 
 ### Path A: User Downloaded a Custom Kit from `surfclock.web.app` (Fastest)
 If the user downloaded a package from the 3D Studio Customizer (e.g. `SurfClock_<REGION>_Custom_Kit.zip` or unzipped folder):
-- The dial STL, C++ stepper angles, and Cloudflare Worker `SPOTS` array are **already hardcoded** for their 5 beaches.
+- The dial STL, C++ stepper angles, and backend `SPOTS` array are **already hardcoded** for their 5 beaches.
 - **Agent Action:** Proceed directly to [Firmware Flashing](#-step-3-build--flash-firmware), [Wi-Fi Configuration](#-step-4-wi-fi--api-configuration), and [Calibration](#-step-5-hand-alignment--zeroing-loop).
 
 ### Path B: User Cloned Directly from GitHub (Interactive Questionnaire)
@@ -32,7 +32,7 @@ If starting from the raw repository, **you must interview the user**. Ask these 
 ```text
 1. "Which 5 beaches or surf breaks do you want on your clock dial (ordered clockwise from 12 o'clock, 2 o'clock, 4 o'clock, 8 o'clock, and 10 o'clock)?"
 2. "What is your local Wi-Fi network SSID and password?"
-3. "Do you want to deploy your own Cloudflare Worker (requires free Cloudflare account), or use the default public endpoint (https://surfclock.eggbot.net/api/surf)?"
+3. "Do you want to deploy your own backend via Google AI Studio / Cloud Run, or use the default public endpoint (https://surfclock.eggbot.net/api/surf)?"
 ```
 
 Once the user answers:
@@ -49,7 +49,7 @@ Once the user answers:
    - Pos 4: $240.0^\circ$ (8 o'clock)
    - Pos 5: $300.0^\circ$ (10 o'clock)
    And update `calibrateCurrentAsBeach(int pos)` with steps: `0, 341, 683, 1365, 1707`.
-4. **Update `cloudflare-worker/src/index.js`:**
+4. **Update `backend/server.js`:**
    Replace the `SPOTS` array with the 5 spots with their coordinates, facing, and swell/wind angles.
 5. **Update `server/spots.json`:**
    Sync the JSON file for local server fallback.
@@ -99,9 +99,9 @@ Open the serial connection at **115200 baud** (or instruct the user to run `pio 
    wifi "SSID" "PASSWORD"
    ```
    *Note: Wi-Fi credentials persist in ESP32 flash memory across power cuts and reboots.*
-2. **Configure API URL (if using a custom Cloudflare Worker):**
+2. **Configure API URL (if using a custom Google AI Studio / Cloud Run backend):**
    ```text
-   api https://<your-worker-name>.workers.dev/api/surf
+   api https://<your-service>.run.app/api/surf
    ```
 3. **Verify connectivity:**
    ```text
@@ -146,17 +146,29 @@ Instruct the user:
 
 ---
 
-## ☁️ Step 6: Deploy Cloudflare Worker (Optional)
+## ☁️ Step 6: Deploy Backend (Google AI Studio / Cloud Run)
 
-If the user wants their own serverless edge API:
+If the user wants their own live scoring backend + web dashboard (`backend/`):
+
+### Method A: Google AI Studio 1-Click Deploy (No CLI Required)
+1. Instruct the user to open **[Google AI Studio → Build](https://aistudio.google.com/apps)** and upload/import the `backend/` folder (`server.js`, `dashboard.html`, `package.json`, `Dockerfile`, `metadata.json`).
+2. Instruct them to click **🚀 Deploy to Cloud Run** in the top-right corner of AI Studio:
+   - Choose a Tier 1 region such as `us-central1` so it stays within **Google Cloud Run's $0/month Always Free tier**.
+   - Ensure **"Allow unauthenticated invocations"** is checked so the ESP32 can poll `GET /api/surf` without browser login cookies.
+3. Once deployed, set the resulting URL on the clock over USB serial:
+   ```text
+   api https://<your-service>.run.app/api/surf
+   ```
+
+### Method B: Automated CLI Deploy (`gcloud`)
+If the user has `gcloud` authenticated to their personal Google Cloud project:
 ```bash
-cd cloudflare-worker
-npx wrangler deploy
+cd backend
+gcloud run deploy surfclock --source . --region us-central1 --allow-unauthenticated
 ```
-Wrangler will output the live URL (e.g. `https://surfclock-api.<account>.workers.dev`).
-Set this URL on the clock using:
+Cloud Run will output the live URL (`https://<your-service>.run.app`). Set it on the clock using:
 ```text
-api https://surfclock-api.<account>.workers.dev/api/surf
+api https://<your-service>.run.app/api/surf
 ```
 
 ---

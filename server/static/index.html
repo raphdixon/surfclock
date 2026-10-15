@@ -1224,7 +1224,7 @@
         try {
           res = await fetch("/api/surf");
         } catch (e) {
-          res = await fetch("https://surfclock.quiet-king-8097.workers.dev/api/surf");
+          res = await fetch("https://surfclock.eggbot.net/api/surf");
         }
         if (!res.ok) throw new Error("Failed to fetch surf data");
         const data = await res.json();

@@ -1,0 +1,13 @@
+{
+  "name": "surfclock-backend",
+  "version": "1.0.0",
+  "description": "Google AI Studio & Cloud Run scoring backend for the ESP32 SurfClock physical display",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}

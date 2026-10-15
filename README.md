@@ -8,13 +8,13 @@ SurfClock solves a simple problem: which beach should you go for a surf at this 
 > 🤖 **Using an AI Coding Agent (Antigravity, Cursor, Claude Code, Windsurf)?**  
 > Don't write code or flash manually! Just point your agent at this repository and tell it:  
 > **`"Read AGENT.md and set up my SurfClock."`**  
-> Your agent will interview you for your local beaches, configure the firmware, deploy the edge API, and help calibrate your clock hands!
+> Your agent will interview you for your local beaches, configure the firmware, deploy your Google AI Studio / Cloud Run backend, and help calibrate your clock hands!
 
 ---
 
 ## 🤖 The Modern Way: Point an AI Agent at It
 
-Let's be real: no one is manually modifying C++ and deploying workers line-by-line anymore. The fastest way to get your SurfClock running is to let an AI agent do it for you.
+Let's be real: no one is manually modifying C++ and deploying backends line-by-line anymore. The fastest way to get your SurfClock running is to let an AI agent do it for you.
 
 ### Option 1: The 30-Second Web Flow (Easiest)
 1. Go to [surfclock.web.app](https://surfclock.web.app).
@@ -22,7 +22,7 @@ Let's be real: no one is manually modifying C++ and deploying workers line-by-li
 3. Click **"Download Custom Full-Stack Kit (.ZIP)"**.
 4. Unzip the package, open your AI agent (Antigravity, Cursor, etc.), and say:
    > *"I downloaded this custom SurfClock kit. Flash it to my ESP32-S3 over USB and help me connect to Wi-Fi."*
-   Everything (3D dial STL, C++ stepper angles, and Cloudflare Worker coordinates) is already hardcoded for your beaches.
+   Everything (3D dial STL, C++ stepper angles, and backend coordinates) is already hardcoded for your beaches.
 
 ### Option 2: The Agent Questionnaire (Direct from GitHub)
 1. Clone this repo: `git clone https://github.com/raphdixon/surfclock.git`.
@@ -32,8 +32,8 @@ Let's be real: no one is manually modifying C++ and deploying workers line-by-li
 4. Your agent will conduct a brief questionnaire:
    - Which 5 beaches you want on the dial (from 12 o'clock clockwise).
    - Your local Wi-Fi network SSID and password.
-   - Whether you want to deploy a private Cloudflare Worker or use the public endpoint.
-5. The agent automatically calculates GPS coordinates, facing angles, and offshore wind windows, injects them into `firmware/src/stepper_controller.cpp` and `cloudflare-worker/src/index.js`, builds and uploads the firmware with PlatformIO, and guides hand calibration!
+   - Whether you want to deploy your own backend via **Google AI Studio / Cloud Run** or use the public endpoint.
+5. The agent automatically calculates GPS coordinates, facing angles, and offshore wind windows, injects them into `firmware/src/stepper_controller.cpp` and `backend/server.js`, builds and uploads the firmware with PlatformIO, and guides hand calibration!
 ---
 
 ## Required Components (Bill of Materials)
@@ -139,14 +139,14 @@ Once the serial monitor opens, run these interactive commands:
 SurfClock uses the **Open-Meteo Marine & Weather API**—it is 100% free, requires no API key, and covers ocean coordinates globally.
 
 You can configure SurfClock for your local coastline in two places:
-1. **The Backend Scoring Engine** (`cloudflare-worker/src/index.js` or `server/spots.json`): defines the geographic coordinates and oceanographic preferences for each spot.
+1. **The Backend Scoring Engine** (`backend/server.js` or `server/spots.json`): defines the geographic coordinates and oceanographic preferences for each spot.
 2. **The Clock Dial Mapping** (`firmware/src/stepper_controller.cpp`): maps spot positions to angles on your clock face.
 
 ---
 
 ### Step 1: Define Your Beaches in the Backend
 
-In `cloudflare-worker/src/index.js` (or `server/spots.json` for the local Python server), edit the `SPOTS` array:
+In `backend/server.js` (or ask Gemini inside **Google AI Studio** to update it for you!), edit the `SPOTS` array:
 
 ```javascript
 const SPOTS = [
@@ -212,26 +212,39 @@ bool StepperController::setBeachPosition(int pos) {
 
 ### Step 3: Deploy the Backend
 
-#### Option A: Cloudflare Worker (Recommended - Free Serverless Edge)
-```bash
-cd cloudflare-worker
-npx wrangler deploy
-```
-This deploys your scoring API to `https://<your-worker-name>.workers.dev/api/surf`.
+#### Option A: Google AI Studio → 1-Click Deploy to Cloud Run (Recommended — No CLI Needed)
+You can customize your beaches with Gemini and host your live `/api/surf` endpoint + web dashboard directly from **Google AI Studio**:
 
-Set this URL on your clock via the serial monitor:
+1. Go to **[Google AI Studio → Build](https://aistudio.google.com/apps)** and create a new app (or import the [`backend/`](backend/) folder from this repo: `server.js`, `dashboard.html`, `package.json`, `Dockerfile`, and `metadata.json`).
+2. *(Optional)* Ask Gemini right inside AI Studio:
+   > *"Update the `SPOTS` array in `server.js` for my 5 local breaks: [Your 5 Beaches] with their GPS coordinates, facing bearings, and offshore wind windows."*
+3. Click the **🚀 Deploy to Cloud Run** button in the top-right corner of Google AI Studio:
+   - **Region:** Choose a Tier 1 region such as `us-central1` or `us-west1` so your service stays within **Google Cloud Run's $0/month Always Free tier** (the backend caches Open-Meteo telemetry in memory for 10 minutes, using <2% of the free monthly CPU/request quota).
+   - **Authentication:** Make sure **"Allow unauthenticated invocations"** is enabled (the ESP32 microcontroller polls `GET /api/surf` directly over Wi-Fi without browser login cookies).
+4. Once deployed, copy your Cloud Run URL (`https://<your-service>.run.app`) and set it on your clock via the USB serial monitor:
+   ```text
+   api https://<your-service>.run.app/api/surf
+   ```
+   *(Visiting `https://<your-service>.run.app/` in any browser opens your live web telemetry dashboard!)*
+
+#### Option B: Deploy to Google Cloud Run via Terminal (`gcloud` CLI)
+If you have the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed, you (or your AI agent) can deploy in one command:
+```bash
+cd backend
+gcloud run deploy surfclock --source . --region us-central1 --allow-unauthenticated
 ```
-api https://<your-worker-name>.workers.dev/api/surf
+Then set the resulting URL on your clock:
+```text
+api https://<your-service>.run.app/api/surf
 ```
 
-#### Option B: Local Python Server (Self-Hosted)
-If you prefer running a local server on a Raspberry Pi or home server:
+#### Option C: Local Server (Raspberry Pi / Home Server)
+If you prefer running the scoring engine locally on your own LAN:
 ```bash
-cd server
-pip install requests
-python server.py
+cd backend
+node server.js
 ```
-This runs the scoring engine at `http://<your-local-ip>:8000/api/surf`.
+This runs the dashboard at `http://<your-local-ip>:3000/` and the clock API at `http://<your-local-ip>:3000/api/surf`.
 
 ---
 
