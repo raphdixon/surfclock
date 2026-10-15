@@ -273,12 +273,12 @@ Connect over USB at **115200 baud** to access real-time diagnostics:
 
 ## How Surf Quality is Scored
 
-The scoring engine evaluates real-time buoy and weather telemetry to generate a composite quality score from **0 to 100**, mapped to the **1.0 to 10.0** gauge:
+The scoring engine uses a **Surfline-calibrated LOTUS wave model** to translate offshore buoy and wind telemetry into a **0 to 100** score (mapped to the **1.0 to 10.0** gauge and Surfline's 7-tier `VERY_POOR` to `EPIC` scale):
 
-1. **Swell Height (0–35 pts)**: Evaluated against each beach's rideable envelope using Gaussian falloff.
-2. **Swell Period (0–25 pts)**: Long-period groundswells (12s–16s+) get full points; weak short-period wind chop (<8s) is penalized.
-3. **Swell Direction (0–15 pts)**: Evaluates swell approach angle relative to bay exposure and headland bathymetry.
-4. **Wind & Cleanliness (-15 to +25 pts)**: Clean offshore winds groom wave faces (+25 pts); strong onshore winds cause chop and blowout penalties (-15 pts). Light/glassy winds score high neutral.
+1. **Spectral Period Conversion ($T_m \to T_p$)**: Converts Open-Meteo's mean spectral period ($T_m$) into peak groundswell period ($T_p = 1.22 \times T_m$) and combines primary + secondary swell energy.
+2. **Nearshore Shoaling & Refraction ($H_b$)**: Projects offshore swell height into breaking wave face height using directional cosine refraction against each beach's facing angle and Komar-Gaughan period shoaling $(T_p / 10.5)^{0.35}$.
+3. **Wave-Size Gating**: Small surf (`<0.6m` / `1–2 ft`) is capped near `POOR` / `POOR_TO_FAIR` even when glassy, matching Surfline's rating scale.
+4. **Wind Grooming & Chop Penalty**: Light glassy air (`<7 km/h`) and moderate offshore winds (`7–18 km/h`) boost quality; cross-shore and onshore winds apply progressive chop penalties alongside a local wind-wave chop ratio check.
 
 ---
 ## 🎯 Hand Alignment & Calibration Guide

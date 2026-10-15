@@ -51,7 +51,7 @@ function inWindow(angle, minD, maxD) {
 }
 
 async function fetchSpotConditions(spot) {
-  const mUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period&timezone=auto`;
+  const mUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto`;
   const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`;
 
   const headers = { "User-Agent": "SurfClock-CloudRun/1.0" };
@@ -67,23 +67,31 @@ async function fetchSpotConditions(spot) {
   const mData = await mRes.json();
   const wData = await wRes.json();
 
-  const mh = mData.hourly || {};
+  const mc = mData.current || {};
   const wc = wData.current || {};
 
-  const waveHeight = mh.wave_height?.[0] || 0.0;
-  const wavePeriod = mh.wave_period?.[0] || 0.0;
-  const waveDir = mh.wave_direction?.[0] || 0.0;
-  const swellHeight = mh.swell_wave_height?.[0] || waveHeight;
-  const swellPeriod = mh.swell_wave_period?.[0] || wavePeriod;
-  const swellDir = mh.swell_wave_direction?.[0] || waveDir;
+  const sw1H = mc.swell_wave_height || 0.0;
+  const sw2H = mc.secondary_swell_wave_height || 0.0;
+  const wwH = mc.wind_wave_height || 0.0;
+  const totalH = mc.wave_height || sw1H;
 
+  // Effective groundswell height: combine primary + secondary swell energy + 25% of wind-swell energy
+  const combinedSwellH = Math.sqrt(sw1H * sw1H + sw2H * sw2H + 0.25 * wwH * wwH);
+  const effSwellH = Math.max(sw1H, combinedSwellH, 0.85 * totalH);
+
+  // Convert Open-Meteo ECWAM Mean Period (Tm) to Peak Spectral Period (Tp = 1.22 * Tm)
+  const rawPeriod = Math.max(mc.swell_wave_period || 0.0, mc.wave_period || 0.0);
+  const peakPeriod = rawPeriod * 1.22;
+
+  const swellDir = mc.swell_wave_direction ?? mc.wave_direction ?? spot.facing;
   const windSpeed = wc.wind_speed_10m || 0.0;
   const windDir = wc.wind_direction_10m || 0.0;
 
   return {
-    swell_h: swellHeight,
-    swell_p: swellPeriod,
+    swell_h: effSwellH,
+    swell_p: peakPeriod,
     swell_d: swellDir,
+    wind_wave_h: wwH,
     wind_spd: windSpeed,
     wind_d: windDir
   };
@@ -109,62 +117,117 @@ function getSwellExposure(spotPos, swellDir) {
   return 1.0;
 }
 
+// Surfline-calibrated LOTUS scoring model:
+// Shoals & refracts offshore swell to nearshore breaking face height (Hb),
+// applies wave-size baseline + period quality + wind speed/direction grooming.
 function scoreSpot(spot, cond) {
-  const exposure = getSwellExposure(spot.pos, cond.swell_d);
-  const effSwellH = cond.swell_h * exposure;
+  const swellH = cond.swell_h || 0;
+  const swellP = cond.swell_p || 0;
+  const swellD = cond.swell_d ?? spot.facing;
+  const windSpd = cond.wind_spd || 0;
+  const windD = cond.wind_d ?? 0;
+  const windWaveH = cond.wind_wave_h || 0;
 
-  // Height score (0-35)
-  const idealS = (spot.min_s + spot.max_s) / 2;
-  let hScore = 0;
-  if (effSwellH < spot.min_s) {
-    hScore = Math.max(0, 15 * (effSwellH / Math.max(0.1, spot.min_s)));
-  } else if (effSwellH <= spot.max_s) {
-    const ratio = 1.0 - Math.abs(effSwellH - idealS) / (spot.max_s - spot.min_s);
-    hScore = 25 + 10 * Math.max(0, ratio);
+  // 1. Directional refraction: cosine angular decay from spot facing bearing
+  const swellDiff = angleDiff(swellD, spot.facing);
+  const rad = (Math.min(140, swellDiff) * Math.PI) / 180;
+  const refraction = 0.52 + 0.82 * Math.pow(Math.max(0, Math.cos(rad * 0.75)), 1.15);
+
+  // 2. Period shoaling: Komar-Gaughan law (Tp / 10.5)^0.35
+  const clampedP = Math.max(4.0, Math.min(20.0, swellP));
+  const shoaling = Math.pow(clampedP / 10.5, 0.35);
+
+  // 3. Bay / headland bathymetry multiplier
+  const bayExposure = getSwellExposure(spot.pos, swellD);
+
+  // Estimated nearshore breaking face height (meters)
+  const hb = swellH * refraction * shoaling * bayExposure;
+
+  // 4. Base wave size rating on Surfline 0..6 scale
+  let sizeRating = 0;
+  const maxS = spot.max_s || 3.2;
+  if (hb < 0.25) {
+    sizeRating = (hb / 0.25) * 0.7;
+  } else if (hb < 0.60) {
+    sizeRating = 0.70 + ((hb - 0.25) / 0.35) * 1.05;
+  } else if (hb < 1.20) {
+    sizeRating = 1.75 + ((hb - 0.60) / 0.60) * 1.05;
+  } else if (hb <= maxS) {
+    const span = Math.max(0.8, maxS - 1.20);
+    sizeRating = 2.80 + Math.min(1.25, ((hb - 1.20) / span) * 1.15);
   } else {
-    hScore = Math.max(5, 30 - (effSwellH - spot.max_s) * 10);
+    sizeRating = Math.max(1.4, 3.95 - (hb - maxS) * 0.65);
   }
 
-  // Period score (0-25)
-  let pScore = 0;
-  if (cond.swell_p >= 14) pScore = 25;
-  else if (cond.swell_p >= 11) pScore = 20 + (cond.swell_p - 11) * 1.66;
-  else if (cond.swell_p >= 8) pScore = 12 + (cond.swell_p - 8) * 2.66;
-  else pScore = Math.max(2, cond.swell_p * 1.5);
-
-  // Direction score (0-15)
-  let dScore = 0;
-  if (inWindow(cond.swell_d, spot.swell_min, spot.swell_max)) {
-    dScore = 15;
+  // 5. Swell Period Quality Adjustment (-0.40 to +0.85 on 0..6 scale), gated by wave size
+  let periodAdj = 0;
+  if (clampedP < 7.0) {
+    periodAdj = -0.40 + ((clampedP - 4.0) / 3.0) * 0.20;
+  } else if (clampedP < 10.0) {
+    periodAdj = -0.20 + ((clampedP - 7.0) / 3.0) * 0.25;
+  } else if (clampedP < 14.0) {
+    periodAdj = 0.05 + ((clampedP - 10.0) / 4.0) * 0.45;
   } else {
-    const diff = Math.min(angleDiff(cond.swell_d, spot.swell_min), angleDiff(cond.swell_d, spot.swell_max));
-    dScore = Math.max(0, 15 - diff * 0.25);
+    periodAdj = 0.50 + Math.min(0.35, ((clampedP - 14.0) / 6.0) * 0.35);
   }
+  const sizeGate = Math.min(1.0, hb / 0.65);
+  periodAdj *= sizeGate;
 
-  // Wind score (-15 to 25)
+  // 6. Wind Speed x Direction Adjustment (-2.2 to +0.65 on 0..6 scale)
   const offshoreCenter = (spot.facing + 180) % 360;
-  const windDiff = angleDiff(cond.wind_d, offshoreCenter);
-  let wScore = 0;
+  const windDiff = angleDiff(windD, offshoreCenter);
+  let windAdj = 0;
   let wText = "Light";
 
-  if (cond.wind_spd < 7) {
-    const alignment = 1.0 - (windDiff / 180.0);
-    wScore = 21.0 + 3.0 * alignment;
+  if (windSpd < 7.0) {
+    const align = 1.0 - (windDiff / 180.0);
+    windAdj = (0.35 + 0.15 * align) * sizeGate;
     wText = "Glassy";
-  } else if (inWindow(cond.wind_d, spot.wind_min, spot.wind_max) || windDiff < 45) {
-    wScore = cond.wind_spd <= 20 ? 25 : 18;
+  } else if (inWindow(windD, spot.wind_min, spot.wind_max) || windDiff <= 50) {
     wText = "Clean Offshore";
-  } else if (windDiff < 90) {
-    wScore = cond.wind_spd < 15 ? 12 : 4;
+    if (windSpd <= 18.0) {
+      windAdj = (0.50 + 0.15 * (1.0 - Math.min(50, windDiff) / 50.0)) * sizeGate;
+    } else if (windSpd <= 30.0) {
+      windAdj = (0.50 - ((windSpd - 18.0) / 12.0) * 0.75) * sizeGate;
+    } else {
+      windAdj = -0.30 - Math.min(1.0, (windSpd - 30.0) / 20.0) * 0.85;
+      wText = "Strong Offshore";
+    }
+  } else if (windDiff <= 100) {
     wText = "Cross-shore";
+    const crossSeverity = (windDiff - 50.0) / 50.0;
+    if (windSpd <= 12.0) {
+      windAdj = -0.05 - 0.20 * crossSeverity;
+    } else if (windSpd <= 22.0) {
+      windAdj = -0.25 - ((windSpd - 12.0) / 10.0) * (0.60 + 0.25 * crossSeverity);
+    } else {
+      windAdj = -0.95 - Math.min(1.15, ((windSpd - 22.0) / 15.0) * 1.15);
+      if (windSpd >= 28.0) wText = "Blown Out";
+    }
   } else {
-    wScore = cond.wind_spd < 12 ? 5 : (cond.wind_spd < 22 ? -5 : -15);
-    wText = cond.wind_spd >= 22 ? "Blown Out" : "Onshore Chop";
+    wText = windSpd >= 22.0 ? "Blown Out" : "Onshore Chop";
+    if (windSpd <= 11.0) {
+      windAdj = -0.15 - ((windSpd - 7.0) / 4.0) * 0.25;
+    } else if (windSpd <= 20.0) {
+      windAdj = -0.40 - ((windSpd - 11.0) / 9.0) * 0.70;
+    } else {
+      windAdj = -1.10 - Math.min(1.15, ((windSpd - 20.0) / 15.0) * 1.15);
+    }
   }
 
-  const rawTotal = hScore + pScore + dScore + wScore;
+  // 7. Wind-wave chop penalty when short-period wind-sea swamps groundswell
+  let chopPenalty = 0;
+  if (windWaveH > 0.35 && swellH > 0) {
+    const chopRatio = windWaveH / Math.max(0.4, swellH);
+    if (chopRatio > 0.6 && windDiff > 55) {
+      chopPenalty = Math.min(0.45, (chopRatio - 0.6) * 0.40);
+    }
+  }
+
+  const rating0to6 = Math.max(0.0, Math.min(6.0, sizeRating + periodAdj + windAdj - chopPenalty - 0.14));
+  const rawTotal = 7.5 + (rating0to6 / 6.0) * 86.5;
   const total = Math.max(0, Math.min(100, Math.round(rawTotal)));
-  return { score: total, rawScore: rawTotal, wind_condition: wText, effective_swell_h: effSwellH };
+  return { score: total, rawScore: rawTotal, wind_condition: wText, effective_swell_h: hb };
 }
 
 async function evaluateAllSpots(forceRefresh = false) {
