@@ -49,8 +49,8 @@ Once the user answers:
    - Pos 4: $240.0^\circ$ (8 o'clock)
    - Pos 5: $300.0^\circ$ (10 o'clock)
    And update `calibrateCurrentAsBeach(int pos)` with steps: `0, 341, 683, 1365, 1707`.
-4. **Update `backend/server.js`:**
-   Replace the `SPOTS` array with the 5 spots with their coordinates, facing, and swell/wind angles.
+4. **Update `backend/spots.json`:**
+   Replace the 5 spots array with their coordinates, facing, and swell/wind angles (and run `npm run zip` inside `backend/` to refresh `surfclock-aistudio-backend.zip`).
 5. **Update `server/spots.json`:**
    Sync the JSON file for local server fallback.
 

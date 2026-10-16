@@ -20,17 +20,28 @@ const PORT = Number(process.env.PORT) || 3000;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // ============================================================================
-// Configure Your 5 Local Surf Breaks (12, 2, 4, 8, and 10 o'clock on the dial)
+// Configure Your 5 Local Surf Breaks in spots.json (12, 2, 4, 8, and 10 o'clock)
 // Tip: In Google AI Studio, simply ask Gemini:
-//   "Update SPOTS to my 5 local beaches: [list your beaches]"
+//   "Update spots.json to my 5 local beaches: [list your beaches]"
 // ============================================================================
-const SPOTS = [
+const DEFAULT_SPOTS = [
   { pos: 1, name: "Long Reef", dial_text: "LONG REEF", angle: 0, lat: -33.742, lon: 151.311, facing: 70, swell_min: 40, swell_max: 130, wind_min: 240, wind_max: 300, min_s: 0.8, max_s: 3.5, period: 12 },
   { pos: 2, name: "Dee Why", dial_text: "DEE WHY", angle: 60, lat: -33.754, lon: 151.299, facing: 100, swell_min: 80, swell_max: 170, wind_min: 240, wind_max: 290, min_s: 0.8, max_s: 3.5, period: 12 },
   { pos: 3, name: "Curl Curl", dial_text: "CURL CURL", angle: 120, lat: -33.768, lon: 151.298, facing: 95, swell_min: 70, swell_max: 160, wind_min: 260, wind_max: 310, min_s: 0.6, max_s: 3.0, period: 12 },
   { pos: 4, name: "Freshwater", dial_text: "FRESHIE", angle: 240, lat: -33.780, lon: 151.291, facing: 85, swell_min: 70, swell_max: 150, wind_min: 250, wind_max: 300, min_s: 0.7, max_s: 2.2, period: 11 },
   { pos: 5, name: "Queenscliff", dial_text: "QUEENSCLIFF", angle: 300, lat: -33.791, lon: 151.289, facing: 80, swell_min: 60, swell_max: 150, wind_min: 240, wind_max: 300, min_s: 0.6, max_s: 2.5, period: 11 }
 ];
+
+function loadSpots() {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, "spots.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch (_) {}
+  return DEFAULT_SPOTS;
+}
+
+const SPOTS = loadSpots();
 
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, "dashboard.html"), "utf8");
 
@@ -330,8 +341,12 @@ const server = http.createServer(async (req, res) => {
   res.end("SurfClock Backend Active. Endpoints: / (dashboard), /api/surf (ESP32 JSON)");
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🌊 SurfClock Backend listening on http://0.0.0.0:${PORT}`);
-  console.log(`   Dashboard : http://localhost:${PORT}/`);
-  console.log(`   ESP32 API : http://localhost:${PORT}/api/surf`);
-});
+if (require.main === module) {
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🌊 SurfClock Backend listening on http://0.0.0.0:${PORT}`);
+    console.log(`   Dashboard : http://localhost:${PORT}/`);
+    console.log(`   ESP32 API : http://localhost:${PORT}/api/surf`);
+  });
+}
+
+module.exports = { SPOTS, scoreSpot, fetchSpotConditions, evaluateAllSpots };

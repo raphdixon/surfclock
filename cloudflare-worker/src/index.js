@@ -1205,34 +1205,34 @@ export default {
               <button type="button" class="score-help-btn" aria-label="How score is determined">?</button>
               <div class="score-popover" id="scorePopover">
                 <div class="popover-title">HOW BREAK SCORING WORKS</div>
-                <p class="popover-lead">SurfClock calculates live conditions using Gemini intelligence across 5 Northern Beaches breaks from marine buoys and meteorological models:</p>
+                <p class="popover-lead">SurfClock uses a Surfline-calibrated LOTUS nearshore wave &amp; wind model across your 5 breaks:</p>
                 <div class="popover-row">
                   <div class="popover-row-header">
-                    <span>🌊 Swell Size</span>
-                    <span>0 – 35 pts</span>
+                    <span>🌊 Nearshore Face (Hb)</span>
+                    <span>Refraction &amp; Shoaling</span>
                   </div>
-                  <div class="popover-desc">Wave face height scored against each break's optimal swell window.</div>
+                  <div class="popover-desc">Projects offshore swell into breaking face height using bay exposure and approach angle.</div>
                 </div>
                 <div class="popover-row">
                   <div class="popover-row-header">
-                    <span>⏱️ Swell Period</span>
-                    <span>0 – 25 pts</span>
+                    <span>⏱️ Peak Period (Tp)</span>
+                    <span>Tp = 1.22 × Tm</span>
                   </div>
-                  <div class="popover-desc">Groundswell interval (11s – 16s+) rewards clean organized sets over wind chop.</div>
+                  <div class="popover-desc">Converts mean spectral period to peak groundswell interval (11s–18s+) for shoaling power.</div>
                 </div>
                 <div class="popover-row">
                   <div class="popover-row-header">
-                    <span>🧭 Swell Direction</span>
-                    <span>0 – 15 pts</span>
+                    <span>📏 Wave-Size Gate</span>
+                    <span>POOR .. EPIC</span>
                   </div>
-                  <div class="popover-desc">Rewards angles matching the bay’s natural geographic exposure.</div>
+                  <div class="popover-desc">Small surf (&lt;0.6m / 1–2ft) is capped near POOR_TO_FAIR even when glassy, matching Surfline.</div>
                 </div>
                 <div class="popover-row">
                   <div class="popover-row-header">
-                    <span>💨 Wind & Surface</span>
-                    <span>-15 to +25 pts</span>
+                    <span>💨 Wind &amp; Chop Matrix</span>
+                    <span>Speed × Direction</span>
                   </div>
-                  <div class="popover-desc">Offshore grooming gives up to +25 pts; cross-shore +12 pts; onshore chop incurs up to -15 pts penalty.</div>
+                  <div class="popover-desc">Glassy (&lt;7 km/h) and offshore (7–18 km/h) groom the face; onshore wind &amp; short wind-sea chop penalize.</div>
                 </div>
                 <div class="popover-row">
                   <div class="popover-row-header">

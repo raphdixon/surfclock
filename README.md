@@ -139,35 +139,34 @@ Once the serial monitor opens, run these interactive commands:
 SurfClock uses the **Open-Meteo Marine & Weather API**—it is 100% free, requires no API key, and covers ocean coordinates globally.
 
 You can configure SurfClock for your local coastline in two places:
-1. **The Backend Scoring Engine** (`backend/server.js` or `server/spots.json`): defines the geographic coordinates and oceanographic preferences for each spot.
+1. **The Backend Spots Config** (`backend/spots.json` or `server/spots.json`): defines the geographic coordinates and oceanographic preferences for each spot, completely separate from the scoring math in `backend/server.js`.
 2. **The Clock Dial Mapping** (`firmware/src/stepper_controller.cpp`): maps spot positions to angles on your clock face.
 
 ---
 
 ### Step 1: Define Your Beaches in the Backend
 
-In `backend/server.js` (or ask Gemini inside **Google AI Studio** to update it for you!), edit the `SPOTS` array:
+In `backend/spots.json` (or ask Gemini inside **Google AI Studio** to update it for you!), edit your 5 breaks:
 
-```javascript
-const SPOTS = [
+```json
+[
   {
-    pos: 1,                          // Unique index (1-12)
-    name: "Trestles",                // Full beach name
-    dial_text: "TRESTLES",           // Label on clock dial
-    angle: 0,                        // Angle on dial (0° = 12 o'clock)
-    lat: 33.385,                     // Latitude (decimal degrees)
-    lon: -117.593,                   // Longitude (decimal degrees)
-    facing: 220,                     // Beach facing direction (degrees from North)
-    swell_min: 180,                  // Optimal swell window start (degrees)
-    swell_max: 260,                  // Optimal swell window end (degrees)
-    wind_min: 30,                    // Optimal offshore wind window start (degrees)
-    wind_max: 90,                    // Optimal offshore wind window end (degrees)
-    min_s: 0.8,                      // Minimum rideable wave height (meters)
-    max_s: 3.5,                      // Maximum swell height before washing out (meters)
-    period: 14                       // Ideal swell period (seconds)
-  },
-  // Add up to 12 spots around the dial...
-];
+    "pos": 1,
+    "name": "Trestles",
+    "dial_text": "TRESTLES",
+    "angle": 0,
+    "lat": 33.385,
+    "lon": -117.593,
+    "facing": 220,
+    "swell_min": 180,
+    "swell_max": 260,
+    "wind_min": 30,
+    "wind_max": 90,
+    "min_s": 0.8,
+    "max_s": 3.5,
+    "period": 14
+  }
+]
 ```
 
 #### How to Find Beach Parameters:
@@ -215,13 +214,15 @@ bool StepperController::setBeachPosition(int pos) {
 #### Option A: Google AI Studio → 1-Click Deploy to Cloud Run (Recommended — No CLI Needed)
 You can customize your beaches with Gemini and host your live `/api/surf` endpoint + web dashboard directly from **Google AI Studio**:
 
-1. Go to **[Google AI Studio → Build](https://aistudio.google.com/apps)** and create a new app (or import the [`backend/`](backend/) folder from this repo: `server.js`, `dashboard.html`, `package.json`, `Dockerfile`, and `metadata.json`).
-2. *(Optional)* Ask Gemini right inside AI Studio:
-   > *"Update the `SPOTS` array in `server.js` for my 5 local breaks: [Your 5 Beaches] with their GPS coordinates, facing bearings, and offshore wind windows."*
-3. Click the **🚀 Deploy to Cloud Run** button in the top-right corner of Google AI Studio:
+1. Download **[`backend/surfclock-aistudio-backend.zip`](backend/surfclock-aistudio-backend.zip)** from this repo.
+2. Open the blank applet template in Code View at **[aistudio.google.com/apps/bundled/blank?showCode=true](https://aistudio.google.com/apps/bundled/blank?showCode=true)** and click **Remix** in the top-right toolbar.
+3. In the left **File explorer** panel, click **`+` (`Add items to file explorer`)** → **Upload Zip file** and select **`surfclock-aistudio-backend.zip`**, then press **`Cmd+S`** (or **`Ctrl+S`**).
+4. *(Optional)* Ask Gemini right inside AI Studio:
+   > *"Update `spots.json` for my 5 local breaks: [Your 5 Beaches] with their GPS coordinates, facing bearings, and offshore wind windows."*
+5. Click the **🚀 Deploy to Cloud Run** button in the top-right corner of Google AI Studio:
    - **Region:** Choose a Tier 1 region such as `us-central1` or `us-west1` so your service stays within **Google Cloud Run's $0/month Always Free tier** (the backend caches Open-Meteo telemetry in memory for 10 minutes, using <2% of the free monthly CPU/request quota).
    - **Authentication:** Make sure **"Allow unauthenticated invocations"** is enabled (the ESP32 microcontroller polls `GET /api/surf` directly over Wi-Fi without browser login cookies).
-4. Once deployed, copy your Cloud Run URL (`https://<your-service>.run.app`) and set it on your clock via the USB serial monitor:
+6. Once deployed, copy your Cloud Run URL (`https://<your-service>.run.app`) and set it on your clock via the USB serial monitor:
    ```text
    api https://<your-service>.run.app/api/surf
    ```
