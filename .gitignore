@@ -33,3 +33,10 @@ npm-debug.log*
 # Secrets & Local Env
 .env
 .env.*
+# --- github-sync defaults ---
+!.env.example
+.dev.vars
+.firebase/
+*.pem
+*.key
+service-account*.json
